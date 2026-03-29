@@ -500,9 +500,10 @@
     L.marker([s.lat, s.lng], { icon, interactive:false }).addTo(stateLayer);
   });
 
+  const overlayLayers = DEMO_MODE ? {} : { 'Frog observations':allSpeciesWMS };
   L.control.layers(
     { 'Dark basemap':cartoDark, 'OpenStreetMap':osm },
-    { 'Frog observations':allSpeciesWMS },
+    overlayLayers,
     { position:'topright' }
   ).addTo(map);
 
