@@ -1,0 +1,798 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Frog Records Dashboard | Portfolio</title>
+
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <style>
+    :root{
+      --bg:#08111f;
+      --panel:#0e1b31;
+      --line:rgba(255,255,255,.08);
+      --text:#edf4ff;
+      --muted:#9fb3d1;
+      --accent:#54c7ff;
+      --accent-2:#88f27d;
+      --shadow:0 14px 40px rgba(0,0,0,.28);
+      --radius:18px;
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{
+      margin:0;
+      font-family:Inter,Segoe UI,Arial,sans-serif;
+      background:
+        radial-gradient(circle at top left, rgba(84,199,255,.10), transparent 26%),
+        radial-gradient(circle at top right, rgba(136,242,125,.08), transparent 20%),
+        linear-gradient(180deg,#07101d 0%, #0a1424 100%);
+      color:var(--text);
+    }
+    .app{
+      display:grid;
+      grid-template-columns:300px 1fr 340px;
+      grid-template-rows:74px 1fr;
+      grid-template-areas:
+        "header header header"
+        "left main right";
+      height:100vh;
+      gap:14px;
+      padding:14px;
+    }
+    .panel{
+      background:linear-gradient(180deg, rgba(18,36,64,.96), rgba(10,24,44,.96));
+      border:1px solid var(--line);
+      border-radius:var(--radius);
+      box-shadow:var(--shadow);
+      overflow:hidden;
+      backdrop-filter:blur(10px);
+    }
+    .header{
+      grid-area:header;
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      padding:0 22px;
+      gap:16px;
+    }
+    .brand h1{margin:0;font-size:28px}
+    .brand p{margin:4px 0 0;font-size:13px;color:var(--muted)}
+    .header-actions{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+    .pill,.search-box,select,.date-input,button{
+      border:1px solid var(--line);
+      background:rgba(255,255,255,.04);
+      color:var(--text);
+      border-radius:12px;
+      min-height:42px;
+    }
+    .search-box{
+      display:flex;
+      align-items:center;
+      gap:10px;
+      padding:0 14px;
+      width:280px;
+    }
+    .search-box input,.date-input input,.mini-search input{
+      width:100%;
+      border:none;
+      outline:none;
+      background:transparent;
+      color:var(--text);
+      font-size:14px;
+    }
+    .search-box input::placeholder,.mini-search input::placeholder{color:var(--muted)}
+    .pill{display:flex;align-items:center;padding:0 14px;color:var(--muted);font-size:13px}
+    .left{grid-area:left;padding:18px;overflow:auto}
+    .main{grid-area:main;display:grid;grid-template-rows:1fr 285px;gap:14px;min-height:0}
+    .right{grid-area:right;padding:18px;overflow:auto}
+    .section-title{margin:0 0 14px;font-size:17px;font-weight:700}
+    .muted{color:var(--muted)}
+    .kpi-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
+    .kpi{
+      padding:18px 18px 16px;
+      position:relative;
+      overflow:hidden;
+    }
+    .kpi:before{
+      content:"";
+      position:absolute;
+      inset:auto -25px -25px auto;
+      width:90px;height:90px;
+      border-radius:50%;
+      background:rgba(255,255,255,.04);
+    }
+    .kpi-label{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em}
+    .kpi-value{margin-top:10px;font-size:34px;font-weight:800;line-height:1}
+    .kpi-sub{margin-top:8px;font-size:13px;color:var(--muted)}
+    .map-card{position:relative;min-height:0}
+    #map{height:100%;width:100%;min-height:0}
+    .map-filter-badge{
+      position:absolute;
+      z-index:900;
+      left:16px;top:16px;
+      display:none;
+      align-items:center;
+      gap:10px;
+      background:rgba(7,16,29,.88);
+      border:1px solid rgba(84,199,255,.35);
+      border-radius:14px;
+      padding:10px 14px;
+      backdrop-filter:blur(10px);
+      font-size:14px;font-weight:700;
+      color:var(--accent);
+    }
+    .map-filter-badge.visible{display:flex}
+    .map-filter-badge button{
+      min-height:unset;width:auto;
+      padding:2px 10px;font-size:12px;font-weight:600;
+      border-radius:8px;cursor:pointer;
+    }
+    .map-stats-panel{
+      position:absolute;z-index:900;
+      left:16px;bottom:16px;
+      width:270px;
+      background:rgba(7,16,29,.88);
+      border:1px solid rgba(255,255,255,.10);
+      border-radius:16px;padding:14px;
+      backdrop-filter:blur(10px);
+    }
+    .map-stats-panel h4{margin:0 0 10px;font-size:15px}
+    .map-stat-line{
+      display:flex;justify-content:space-between;gap:12px;
+      padding:6px 0;font-size:13px;
+      border-bottom:1px solid rgba(255,255,255,.05);
+    }
+    .map-stat-line:last-child{border-bottom:none;padding-bottom:0}
+    .chart-card{padding:18px;min-height:0}
+    .chart-wrap{position:relative;height:100%;min-height:210px}
+    .control-group{display:grid;gap:12px;margin-bottom:16px}
+    label{display:block;margin-bottom:7px;font-size:13px;color:var(--muted);font-weight:600}
+    select,.date-input{width:100%;padding:0 12px}
+    .date-row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+    button{
+      width:100%;cursor:pointer;font-weight:700;
+      background:linear-gradient(135deg, rgba(84,199,255,.22), rgba(136,242,125,.16));
+    }
+    button:hover{filter:brightness(1.08)}
+    /* Sidebar mini KPI summary cards */
+    .sidebar-kpi-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:4px}
+    .sidebar-kpi{
+      padding:12px 14px;
+      background:rgba(255,255,255,.03);
+      border:1px solid var(--line);
+      border-radius:14px;
+    }
+    .sidebar-kpi h4{
+      margin:0 0 6px;font-size:11px;
+      color:var(--muted);font-weight:600;
+      text-transform:uppercase;letter-spacing:.07em;
+    }
+    .sidebar-kpi .big{font-size:21px;font-weight:800;line-height:1;word-break:break-word}
+    .sidebar-kpi .sub{font-size:11px;color:var(--muted);margin-top:4px}
+    .mini-search{
+      display:flex;align-items:center;gap:8px;
+      padding:0 12px;height:42px;margin-bottom:14px;
+      border:1px solid var(--line);border-radius:12px;
+      background:rgba(255,255,255,.03);
+    }
+    .species-list{
+      display:grid;gap:10px;
+      max-height:calc(100vh - 265px);
+      overflow:auto;padding-right:4px;
+    }
+    .species-item{
+      padding:14px;
+      background:rgba(255,255,255,.03);
+      border:1px solid var(--line);
+      border-radius:16px;transition:.2s ease;cursor:pointer;
+    }
+    .species-item:hover{transform:translateY(-1px);border-color:rgba(84,199,255,.30)}
+    .species-item.active{background:rgba(255,255,255,.06)}
+    .species-top{display:flex;justify-content:space-between;gap:12px;margin-bottom:8px;align-items:flex-start}
+    .species-name-block{display:flex;align-items:flex-start;gap:9px}
+    .species-dot{
+      width:11px;height:11px;border-radius:50%;
+      flex-shrink:0;margin-top:4px;
+    }
+    .species-name{font-size:17px;font-weight:800}
+    .species-sci{font-size:13px;color:var(--muted);font-style:italic}
+    .species-count{white-space:nowrap;font-size:26px;font-weight:800;color:#f7fbff}
+    .species-meta{
+      display:flex;justify-content:space-between;gap:10px;
+      margin-top:10px;font-size:12px;color:var(--muted);
+    }
+    .bar{
+      width:100%;height:8px;border-radius:999px;
+      background:rgba(255,255,255,.08);overflow:hidden;margin-top:10px;
+    }
+    .bar > span{display:block;height:100%;border-radius:999px}
+    /* State label marker */
+    .state-label{
+      background:rgba(7,16,29,.90);
+      border:1px solid rgba(84,199,255,.30);
+      border-radius:10px;padding:5px 10px;
+      color:#edf4ff;
+      font-family:Inter,Segoe UI,Arial,sans-serif;
+      font-size:12px;text-align:center;white-space:nowrap;
+      backdrop-filter:blur(8px);pointer-events:none;
+    }
+    .state-label .state-abbr{font-size:17px;font-weight:900;color:#54c7ff;display:block;line-height:1.1}
+    .state-label .state-name{display:block;font-size:10px;color:#9fb3d1;font-weight:400}
+    .state-label .state-count{font-size:11px;color:#88f27d}
+    /* Push the topleft legend below the active-filter badge */
+    #map .leaflet-top.leaflet-left{margin-top:58px}
+    .leaflet-control-attribution{background:rgba(7,16,29,.78)!important;color:#dce8fb!important}
+    .leaflet-popup-content-wrapper,.leaflet-popup-tip{background:#10233f;color:#edf4ff}
+    .leaflet-control-layers{
+      border:none!important;border-radius:14px!important;overflow:hidden;
+      box-shadow:var(--shadow)!important;
+      background:rgba(7,16,29,.88)!important;color:#edf4ff!important;
+    }
+    .leaflet-control-layers-expanded{padding:12px 14px!important}
+    @media (max-width:1400px){
+      .app{grid-template-columns:280px 1fr 310px}
+      .kpi-grid{grid-template-columns:repeat(2,1fr)}
+    }
+    @media (max-width:1080px){
+      .app{
+        grid-template-columns:1fr;
+        grid-template-rows:74px auto auto auto;
+        grid-template-areas:"header" "left" "main" "right";
+        height:auto;
+      }
+      .main{grid-template-rows:60vh 300px}
+      .species-list{max-height:none}
+      .map-stats-panel{width:auto;right:16px}
+    }
+  </style>
+</head>
+<body>
+<div class="app">
+
+  <header class="panel header">
+    <div class="brand">
+      <h1>Frog Records Dashboard</h1>
+    </div>
+    <div class="header-actions">
+      <div class="search-box">
+        <span>🔎</span>
+        <input type="text" placeholder="Search species in ranking panel" id="globalSpeciesSearch" />
+      </div>
+    </div>
+  </header>
+
+  <!-- LEFT SIDEBAR: controls + live summary KPIs -->
+  <aside class="panel left">
+    <div style="margin-bottom:18px;padding-bottom:16px;border-bottom:1px solid rgba(255,255,255,.08);">
+      <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;font-weight:600;">Total records</div>
+      <div style="font-size:36px;font-weight:800;line-height:1.1;margin-top:4px;" id="headerTotalRecords">1,259,595</div>
+      <div style="font-size:12px;color:var(--muted);margin-top:3px;" id="headerTotalSub">All species · national dataset</div>
+    </div>
+    <h3 class="section-title">Dashboard controls</h3>
+    <div class="control-group">
+      <div>
+        <label for="speciesSelect">Species focus</label>
+        <select id="speciesSelect"></select>
+      </div>
+      <div>
+        <label>Date range</label>
+        <div class="date-row">
+          <div class="date-input"><input type="text" value="01/10/2017" /></div>
+          <div class="date-input"><input type="text" value="28/03/2026" /></div>
+        </div>
+      </div>
+      <div>
+        <label for="layerSelect">Primary layer</label>
+        <select id="layerSelect">
+          <option value="observations">Frog observations</option>
+          <option value="richness">Species richness</option>
+          <option value="states">Records by state</option>
+        </select>
+      </div>
+      <button type="button" id="applyFiltersBtn">Apply filters</button>
+      <button type="button" id="clearFilterBtn">Clear selection</button>
+    </div>
+
+    <!-- Summary: States covered only (Total Records shown at top) -->
+    <div style="margin-top:2px">
+      <div style="font-size:13px;font-weight:700;color:var(--muted);margin-bottom:10px;text-transform:uppercase;letter-spacing:.06em;">Summary</div>
+      <div class="sidebar-kpi" style="width:100%;">
+        <h4>States covered</h4>
+        <div class="big" id="sideKpiStates">—</div>
+        <div class="sub" id="sideKpiStatesSub">Select a species to see states</div>
+      </div>
+    </div>
+    <!-- hidden compat IDs -->
+    <span id="sideKpiRecords" style="display:none"></span>
+    <span id="sideKpiRecordsSub" style="display:none"></span>
+  </aside>
+
+  <!-- MAIN: KPIs, map, chart -->
+  <main class="main">
+
+    <section class="panel map-card">
+      <div id="map"></div>
+      <div class="map-filter-badge" id="mapFilterBadge">
+        <span id="mapFilterDot" style="width:11px;height:11px;border-radius:50%;display:inline-block;flex-shrink:0;"></span>
+        <span id="mapFilterLabel"></span>
+        <button type="button" onclick="clearSpeciesFilter()">✕ Clear</button>
+      </div>
+<!-- hidden stat holders kept for JS compat -->
+<span id="mapStatsTitle" style="display:none"></span>
+<span id="statScientific" style="display:none"></span>
+<span id="statStates" style="display:none"></span>
+<span id="statTrend" style="display:none"></span>
+    </section>
+
+    <section class="panel chart-card">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:10px;">
+        <div>
+          <h3 class="section-title" style="margin-bottom:4px;">Observation trend</h3>
+          <div class="muted" style="font-size:13px;" id="chartSubtitle">National observations 2018–2026.</div>
+        </div>
+        <div class="pill" id="chartPill">2018–2026</div>
+      </div>
+      <div class="chart-wrap"><canvas id="timelineChart"></canvas></div>
+    </section>
+  </main>
+
+  <!-- RIGHT: species ranking -->
+  <aside class="panel right">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;">
+      <h3 class="section-title" style="margin-bottom:14px;">Top species ranking</h3>
+      <div class="pill" id="speciesCountPill">10 loaded</div>
+    </div>
+    <div class="mini-search">
+      <span>🔎</span>
+      <input type="text" placeholder="Filter species list" id="speciesSearch" />
+    </div>
+    <div class="species-list" id="speciesList"></div>
+  </aside>
+
+</div>
+
+<script>
+  // -----------------------------------------------------------------------
+  // 1. Unique color palette — one per species
+  //    hue-rotate() shifts GeoServer's red WMS dots to the target hue.
+  //    Red = 0°, so hue-rotate(Xdeg) → hue X on the map.
+  // -----------------------------------------------------------------------
+  const PALETTE = [
+    { color:'#54c7ff', bar:'#54c7ff,#2196f3', filter:'hue-rotate(182deg) saturate(2.2) brightness(1.2)'  }, // cyan
+    { color:'#88f27d', bar:'#88f27d,#27ae60', filter:'hue-rotate(122deg) saturate(2.2) brightness(1.1)'  }, // green
+    { color:'#ffd32a', bar:'#ffd32a,#f39c12', filter:'hue-rotate(55deg)  saturate(3.0) brightness(1.05)' }, // yellow
+    { color:'#ff9f43', bar:'#ff9f43,#e67e22', filter:'hue-rotate(28deg)  saturate(2.8) brightness(1.05)' }, // orange
+    { color:'#c56cf0', bar:'#c56cf0,#8e44ad', filter:'hue-rotate(272deg) saturate(2.0) brightness(1.2)'  }, // purple
+    { color:'#00cec9', bar:'#00cec9,#16a085', filter:'hue-rotate(170deg) saturate(3.0) brightness(1.1)'  }, // teal
+    { color:'#c4e538', bar:'#c4e538,#8bc34a', filter:'hue-rotate(83deg)  saturate(3.0) brightness(1.15)' }, // lime
+    { color:'#74b9ff', bar:'#74b9ff,#2980b9', filter:'hue-rotate(205deg) saturate(2.2) brightness(1.2)'  }, // sky blue
+    { color:'#a29bfe', bar:'#a29bfe,#6c5ce7', filter:'hue-rotate(250deg) saturate(2.0) brightness(1.2)'  }, // lavender
+    { color:'#fd79a8', bar:'#fd79a8,#e91e63', filter:'hue-rotate(318deg) saturate(2.0) brightness(1.15)' }, // pink
+  ];
+
+  // -----------------------------------------------------------------------
+  // 2. Species data — monthly counts are Jan–Dec 2024
+  // -----------------------------------------------------------------------
+  const speciesData = [
+    { common:'Common Eastern Froglet',       scientific:'Crinia signifera',           count:246634, states:['New South Wales','Victoria'],                                      region:'NSW / VIC',      trend:'+8.2%', monthly:[12600,11400,13200,14800,17600,20100,22300,21700,20800,19400,18300,19100] },
+    { common:'Striped Marsh Frog',           scientific:'Limnodynastes peronii',      count:152379, states:['New South Wales','Queensland'],                                   region:'NSW / QLD',      trend:'+6.1%', monthly:[9200,8400,9500,10800,11200,12500,13300,12900,12100,11800,11000,11400] },
+    { common:"Peron's Tree Frog",            scientific:'Litoria peronii',            count:90564,  states:['New South Wales','Queensland','Victoria'],                        region:'East coast',     trend:'+4.7%', monthly:[5100,5000,5400,6100,7000,7600,8100,7800,7300,6900,6400,6600] },
+    { common:'Spotted Marsh Frog',           scientific:'Limnodynastes tasmaniensis', count:84929,  states:['New South Wales','Victoria','South Australia'],                   region:'South-east AU',  trend:'+3.3%', monthly:[4800,4600,5100,5900,6400,7000,7500,7350,6950,6700,6200,6300] },
+    { common:'Eastern Dwarf Tree Frog',      scientific:'Litoria fallax',             count:83600,  states:['Queensland','New South Wales'],                                   region:'QLD / NSW',      trend:'+9.0%', monthly:[4300,4100,4700,5600,6200,7100,7600,7400,6800,6400,5900,6200] },
+    { common:'Eastern Banjo Frog',           scientific:'Limnodynastes dumerilii',    count:44533,  states:['Victoria','New South Wales'],                                     region:'VIC / NSW',      trend:'+2.1%', monthly:[2200,2100,2400,2800,3300,3700,4100,4020,3880,3540,3220,3360] },
+    { common:'Eastern Sign-bearing Froglet', scientific:'Crinia parinsignifera',      count:43873,  states:['New South Wales'],                                                region:'Coastal NSW',    trend:'+5.5%', monthly:[2400,2260,2550,2900,3120,3490,3840,3760,3510,3340,3180,3250] },
+    { common:'Green Tree Frog',              scientific:'Litoria caerulea',           count:42408,  states:['Queensland','Northern Territory'],                                region:'North AU',       trend:'+7.8%', monthly:[2100,2060,2310,2520,2890,3320,3600,3490,3250,3080,2840,2980] },
+    { common:'Brown Tree Frog',              scientific:'Litoria ewingii',            count:40266,  states:['South Australia','Victoria','Tasmania'],                          region:'SA / VIC / TAS', trend:'+2.9%', monthly:[1980,1870,2140,2430,2810,3200,3380,3310,3090,2880,2700,2790] },
+    { common:'Desert Tree Frog',             scientific:'Litoria rubella',            count:19205,  states:['Northern Territory','Queensland','Western Australia'],            region:'Arid north',     trend:'+1.8%', monthly:[1010,970,1080,1250,1490,1710,1830,1760,1660,1540,1410,1495] },
+  ];
+  speciesData.forEach((d, i) => { d.pal = PALETTE[i % PALETTE.length]; });
+
+  // Full national dataset total (all 160 species, not just the top 10 shown in the ranking)
+  const totalRecordsAll = 1259595;
+  const allMonthly = Array(12).fill(0);
+  speciesData.forEach(d => d.monthly.forEach((v, i) => allMonthly[i] += v));
+
+  // Multi-year timeline for all-species view (2018–2026, bi-annual)
+  const timelineLabels = [
+    'Jan 2018','Jul 2018','Jan 2019','Jul 2019','Jan 2020','Jul 2020',
+    'Jan 2021','Jul 2021','Jan 2022','Jul 2022','Jan 2023','Jul 2023',
+    'Jan 2024','Jul 2024','Jan 2025','Jul 2025','Jan 2026'
+  ];
+  const timelineValues = [
+    4200,3700,9800,6200,12100,5900,30200,11900,67700,
+    18600,9600,7800,28900,40300,14200,11700,25600
+  ];
+
+  // Per-species monthly labels — month only (year shown in pill above)
+  const monthlyLabels = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+  // -----------------------------------------------------------------------
+  // 3. State totals (for "Records by state" markers)
+  // -----------------------------------------------------------------------
+  const STATE_TOTALS = [
+    { name:'New South Wales',             abbr:'NSW', lat:-32.0, lng:147.0, count:418000 },
+    { name:'Queensland',                  abbr:'QLD', lat:-22.0, lng:144.5, count:312000 },
+    { name:'Victoria',                    abbr:'VIC', lat:-37.0, lng:144.2, count:285000 },
+    { name:'South Australia',             abbr:'SA',  lat:-30.0, lng:135.5, count:112000 },
+    { name:'Western Australia',           abbr:'WA',  lat:-25.5, lng:121.5, count:87000  },
+    { name:'Northern Territory',          abbr:'NT',  lat:-19.5, lng:133.5, count:35000  },
+    { name:'Tasmania',                    abbr:'TAS', lat:-42.2, lng:146.5, count:18000  },
+    { name:'Australian Capital Territory',abbr:'ACT', lat:-35.4, lng:149.1, count:8000   },
+  ];
+
+  // -----------------------------------------------------------------------
+  // 4. Map setup
+  // -----------------------------------------------------------------------
+  const map = L.map('map', { zoomControl:false }).setView([-25, 134], 4);
+  L.control.zoom({ position:'bottomright' }).addTo(map);
+
+  // Pane for filtered layer — CSS filter changed per species
+  map.createPane('filteredPane');
+  map.getPane('filteredPane').style.zIndex = 450;
+
+  const cartoDark = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
+    { maxZoom:20, attribution:'&copy; OpenStreetMap contributors &copy; CARTO' }).addTo(map);
+
+  const osm = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+    { maxZoom:19, attribution:'&copy; OpenStreetMap contributors' });
+
+  const WMS_URL  = 'http://localhost:8080/geoserver/frogs/wms';
+  const WMS_BASE = { layers:'frogs:frog_raw', format:'image/png', transparent:true, attribution:'GeoServer frogs:frog_raw' };
+
+  const allSpeciesWMS = L.tileLayer.wms(WMS_URL, { ...WMS_BASE }).addTo(map);
+  let filteredWMS     = null;
+  let activeScientific = null;
+  let timelineChart   = null;
+
+  // State label markers
+  const stateLayer = L.layerGroup();
+  STATE_TOTALS.forEach(s => {
+    const icon = L.divIcon({
+      className: '',
+      html: `<div class="state-label">
+               <span class="state-abbr">${s.abbr}</span>
+               <span class="state-name">${s.name}</span>
+               <span class="state-count">${s.count.toLocaleString()} obs.</span>
+             </div>`,
+      iconAnchor: [50, 18]
+    });
+    L.marker([s.lat, s.lng], { icon, interactive:false }).addTo(stateLayer);
+  });
+
+  L.control.layers(
+    { 'Dark basemap':cartoDark, 'OpenStreetMap':osm },
+    { 'Frog observations':allSpeciesWMS },
+    { position:'topright' }
+  ).addTo(map);
+
+  // -----------------------------------------------------------------------
+  // 5. Legend
+  // -----------------------------------------------------------------------
+  const legend = L.control({ position:'topleft' });
+  legend.onAdd = function(){
+    const div = L.DomUtil.create('div');
+    div.style.cssText = 'background:rgba(7,16,29,.84);border:1px solid rgba(255,255,255,.10);border-radius:14px;padding:12px 14px;backdrop-filter:blur(10px);color:#dfeaff;font-size:13px;min-width:200px;';
+    div.id = 'mapLegend';
+    div.innerHTML = legendHTML(null, null);
+    return div;
+  };
+  legend.addTo(map);
+
+  function legendHTML(sci, color){
+    return sci
+      ? `<div style="font-weight:700;margin-bottom:8px;">Active filter</div>
+         <div style="display:flex;align-items:center;gap:8px;margin-bottom:5px;">
+           <span style="width:12px;height:12px;border-radius:50%;background:${color};flex-shrink:0;display:inline-block;box-shadow:0 0 6px ${color}80"></span>
+           <span style="font-style:italic;">${sci}</span>
+         </div>
+         <div style="display:flex;align-items:center;gap:8px;color:#9fb3d1;margin-top:4px;">
+           <span style="width:12px;height:12px;border-radius:50%;background:#ff4444;flex-shrink:0;display:inline-block;opacity:.18"></span>
+           Base layer hidden
+         </div>`
+      : `<div style="font-weight:700;margin-bottom:8px;">Legend</div>
+         <div style="display:flex;align-items:center;gap:8px;">
+           <span style="width:12px;height:12px;border-radius:50%;background:#ff4444;flex-shrink:0;display:inline-block;"></span>
+           All frog observations
+         </div>`;
+  }
+  function updateLegend(sci, color){
+    const el = document.getElementById('mapLegend');
+    if (el) el.innerHTML = legendHTML(sci, color);
+  }
+
+  // -----------------------------------------------------------------------
+  // 6. Species filter — each species gets its own color via CSS filter
+  // -----------------------------------------------------------------------
+  function escapeCql(v){ return String(v).replace(/'/g,"''"); }
+
+  function applySpeciesFilter(scientific, commonName){
+    if (filteredWMS) map.removeLayer(filteredWMS);
+    allSpeciesWMS.setOpacity(0);
+
+    const pal = speciesData.find(d => d.scientific === scientific)?.pal || PALETTE[0];
+    map.getPane('filteredPane').style.filter = pal.filter;
+
+    filteredWMS = L.tileLayer.wms(WMS_URL, {
+      ...WMS_BASE,
+      CQL_FILTER: `scientificname='${escapeCql(scientific)}'`,
+      pane: 'filteredPane'
+    }).addTo(map);
+
+    activeScientific = scientific;
+
+    const dot = document.getElementById('mapFilterDot');
+    dot.style.background  = pal.color;
+    dot.style.boxShadow   = `0 0 7px ${pal.color}`;
+    document.getElementById('mapFilterLabel').textContent = `${commonName} — ${scientific}`;
+    document.getElementById('mapFilterBadge').style.borderColor = pal.color + '55';
+    document.getElementById('mapFilterBadge').classList.add('visible');
+    updateLegend(scientific, pal.color);
+  }
+
+  function clearSpeciesFilter(){
+    if (filteredWMS){ map.removeLayer(filteredWMS); filteredWMS = null; }
+    allSpeciesWMS.setOpacity(1);
+    activeScientific = null;
+    document.getElementById('mapFilterBadge').classList.remove('visible');
+    document.getElementById('mapFilterBadge').style.borderColor = '';
+    updateLegend(null, null);
+    speciesSelect.value = '';
+    updateDashboardForSelection(null);
+    renderSpeciesList(document.getElementById('speciesSearch').value.toLowerCase().trim());
+  }
+  window.clearSpeciesFilter = clearSpeciesFilter;
+
+  // -----------------------------------------------------------------------
+  // 7. Primary layer toggle — show/hide state markers
+  // -----------------------------------------------------------------------
+  document.getElementById('layerSelect').addEventListener('change', function(){
+    if (this.value === 'states') stateLayer.addTo(map);
+    else if (map.hasLayer(stateLayer)) map.removeLayer(stateLayer);
+  });
+
+  // -----------------------------------------------------------------------
+  // 8. DOM refs & species dropdown
+  // -----------------------------------------------------------------------
+  const speciesList      = document.getElementById('speciesList');
+  const speciesSearch    = document.getElementById('speciesSearch');
+  const globalSearch     = document.getElementById('globalSpeciesSearch');
+  const speciesSelect    = document.getElementById('speciesSelect');
+  const speciesCountPill = document.getElementById('speciesCountPill');
+
+  function populateSpeciesSelect(){
+    speciesSelect.innerHTML = '<option value="">All species</option>';
+    speciesData.forEach(d => {
+      const o = document.createElement('option');
+      o.value = d.scientific;
+      o.textContent = `${d.common} — ${d.scientific}`;
+      speciesSelect.appendChild(o);
+    });
+  }
+
+  function getSpeciesSummary(sci){ return speciesData.find(d => d.scientific === sci) || null; }
+
+  // -----------------------------------------------------------------------
+  // 9. Right-panel species list — each card has its unique colored dot
+  // -----------------------------------------------------------------------
+  function renderSpeciesList(filterText){
+    const f = filterText || '';
+    const maxCount = Math.max(...speciesData.map(d => d.count));
+    const items = speciesData.filter(d =>
+      d.common.toLowerCase().includes(f) ||
+      d.scientific.toLowerCase().includes(f) ||
+      d.region.toLowerCase().includes(f) ||
+      d.states.join(' ').toLowerCase().includes(f)
+    );
+
+    speciesList.innerHTML = '';
+    speciesCountPill.textContent = `${items.length} loaded`;
+
+    items.forEach(d => {
+      const pct     = ((d.count / maxCount) * 100).toFixed(1);
+      const isActive = activeScientific === d.scientific;
+      const item    = document.createElement('div');
+      item.className = 'species-item' + (isActive ? ' active' : '');
+      item.style.borderColor = isActive ? d.pal.color : '';
+      item.dataset.scientific = d.scientific;
+
+      item.innerHTML = `
+        <div class="species-top">
+          <div class="species-name-block">
+            <span class="species-dot"
+              style="background:${d.pal.color};box-shadow:0 0 6px ${d.pal.color}70"></span>
+            <div>
+              <div class="species-name">${d.common}</div>
+              <div class="species-sci">${d.scientific}</div>
+            </div>
+          </div>
+          <div class="species-count">${d.count.toLocaleString()}</div>
+        </div>
+        <div class="bar">
+          <span style="width:${pct}%;background:linear-gradient(90deg,${d.pal.bar})"></span>
+        </div>
+        <div class="species-meta">
+          <span>${d.region}</span>
+          <span>${d.trend}</span>
+        </div>
+      `;
+
+      item.addEventListener('click', function(){
+        if (activeScientific === d.scientific){
+          clearSpeciesFilter();
+        } else {
+          speciesSelect.value = d.scientific;
+          applySpeciesFilter(d.scientific, d.common);
+          updateDashboardForSelection(d);
+          fetchSpeciesSummary(d.scientific, d);
+          renderSpeciesList(speciesSearch.value.toLowerCase().trim());
+        }
+      });
+      speciesList.appendChild(item);
+    });
+  }
+
+  // -----------------------------------------------------------------------
+  // 10. KPI updaters — sidebar only
+  // -----------------------------------------------------------------------
+  function updateKpis(s){
+    if (!s){
+      document.getElementById('headerTotalRecords').textContent = totalRecordsAll.toLocaleString();
+      document.getElementById('headerTotalSub').textContent     = 'All species · national dataset';
+      document.getElementById('sideKpiStates').textContent      = '—';
+      document.getElementById('sideKpiStatesSub').textContent   = 'Select a species to see states';
+    } else {
+      document.getElementById('headerTotalRecords').textContent = s.count.toLocaleString();
+      document.getElementById('headerTotalSub').textContent     = s.common;
+      document.getElementById('sideKpiStates').textContent      = s.states.length.toString();
+      document.getElementById('sideKpiStatesSub').textContent   = s.states.join(', ');
+    }
+  }
+
+  function updateMapStats(s){
+    // panel removed — hidden spans keep JS from throwing null errors
+    const set = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+    if (!s){
+      set('mapStatsTitle','Current selection'); set('statScientific','All species');
+      set('statStates','Select a species');     set('statTrend','API ready');
+    } else {
+      set('mapStatsTitle', s.common);           set('statScientific', s.scientific);
+      set('statStates', s.states.join(', '));    set('statTrend', s.trend);
+    }
+  }
+
+  // -----------------------------------------------------------------------
+  // 11. Chart — line color matches species color; labels include year
+  // -----------------------------------------------------------------------
+  function createChart(){
+    timelineChart = new Chart(document.getElementById('timelineChart'), {
+      type: 'line',
+      data: {
+        labels: timelineLabels,
+        datasets:[{
+          label: 'All species · 2018–2026',
+          data: timelineValues,
+          borderColor: '#54c7ff',
+          backgroundColor: 'rgba(84,199,255,.16)',
+          fill: true, tension:.32,
+          pointRadius:3, pointHoverRadius:5,
+          pointBackgroundColor:'#88f27d'
+        }]
+      },
+      options:{
+        responsive:true, maintainAspectRatio:false,
+        layout:{ padding:{ bottom:10 } },
+        interaction:{ mode:'index', intersect:false },
+        plugins:{
+          legend:{ labels:{ color:'#edf4ff', boxWidth:12 } },
+          tooltip:{
+            backgroundColor:'rgba(7,16,29,.95)',
+            titleColor:'#edf4ff', bodyColor:'#edf4ff',
+            borderColor:'rgba(255,255,255,.12)', borderWidth:1
+          }
+        },
+        scales:{
+          x:{ ticks:{ color:'#c6d4eb', maxRotation:45, minRotation:45, autoSkip:true, autoSkipPadding:12 }, grid:{ color:'rgba(255,255,255,.06)' } },
+          y:{ beginAtZero:true,
+              ticks:{ color:'#c6d4eb', callback: v => v>=1000?(v/1000)+'k':v },
+              grid:{ color:'rgba(255,255,255,.06)' } }
+        }
+      }
+    });
+  }
+
+  function updateChart(s){
+    if (!timelineChart) return;
+    const color = s ? s.pal.color : '#54c7ff';
+    const bgColor = s ? `${s.pal.color}28` : 'rgba(84,199,255,.16)';
+    timelineChart.data.labels                           = s ? monthlyLabels : timelineLabels;
+    timelineChart.data.datasets[0].data                = s ? s.monthly : timelineValues;
+    timelineChart.data.datasets[0].label               = s ? `${s.scientific} · 2024` : 'All species · 2018–2026';
+    timelineChart.data.datasets[0].borderColor         = color;
+    timelineChart.data.datasets[0].backgroundColor     = bgColor;
+    timelineChart.data.datasets[0].pointBackgroundColor = color;
+    // Rebuild x-axis ticks object so Chart.js picks up the change on next render
+    timelineChart.options.scales.x.ticks = {
+      color: '#c6d4eb',
+      maxRotation: s ? 0 : 45,
+      minRotation: s ? 0 : 45,
+      autoSkip: true,
+      autoSkipPadding: 12
+    };
+    timelineChart.update('none'); // 'none' skips animation so labels appear immediately
+    document.getElementById('chartSubtitle').textContent = s
+      ? `Monthly observations for ${s.common}, 2024.`
+      : 'National observations 2018–2026.';
+    document.getElementById('chartPill').textContent = s
+      ? `${s.scientific} · 2024`
+      : '2018–2026';
+  }
+
+  function updateDashboardForSelection(s){
+    updateKpis(s);
+    updateMapStats(s);
+    updateChart(s);
+  }
+
+  // -----------------------------------------------------------------------
+  // 12. Optional Flask API
+  // -----------------------------------------------------------------------
+  async function fetchSpeciesSummary(scientific, fallback){
+    try {
+      const res = await fetch(`http://127.0.0.1:5000/species-summary?name=${encodeURIComponent(scientific)}`);
+      if (!res.ok) throw new Error();
+      const data = await res.json();
+      document.getElementById('statScientific').textContent = data.scientificname;
+      document.getElementById('headerTotalRecords').textContent = Number(data.total_records).toLocaleString();
+      document.getElementById('statStates').textContent     = data.states;
+      document.getElementById('statTrend').textContent      = 'Live API';
+      document.getElementById('headerTotalRecords').textContent = Number(data.total_records).toLocaleString();
+      document.getElementById('headerTotalSub').textContent     = data.scientificname;
+      document.getElementById('sideKpiRecords').textContent    = Number(data.total_records).toLocaleString();
+      document.getElementById('sideKpiRecordsSub').textContent = data.scientificname;
+      document.getElementById('sideKpiStates').textContent     = Number(data.total_states).toLocaleString();
+      document.getElementById('sideKpiStatesSub').textContent  = data.states;
+    } catch {
+      if (fallback) document.getElementById('statTrend').textContent = 'Fallback data';
+    }
+  }
+
+  // -----------------------------------------------------------------------
+  // 13. Event wiring
+  // -----------------------------------------------------------------------
+  speciesSearch.addEventListener('input', function(){ renderSpeciesList(this.value.toLowerCase().trim()); });
+  globalSearch.addEventListener('input', function(){
+    speciesSearch.value = this.value;
+    renderSpeciesList(this.value.toLowerCase().trim());
+  });
+  speciesSelect.addEventListener('change', function(){
+    const sel = getSpeciesSummary(this.value);
+    if (!sel) return clearSpeciesFilter();
+    applySpeciesFilter(sel.scientific, sel.common);
+    updateDashboardForSelection(sel);
+    fetchSpeciesSummary(sel.scientific, sel);
+    renderSpeciesList(speciesSearch.value.toLowerCase().trim());
+  });
+  document.getElementById('applyFiltersBtn').addEventListener('click', function(){
+    const sel = getSpeciesSummary(speciesSelect.value);
+    if (!sel) return clearSpeciesFilter();
+    applySpeciesFilter(sel.scientific, sel.common);
+    updateDashboardForSelection(sel);
+    fetchSpeciesSummary(sel.scientific, sel);
+    renderSpeciesList(speciesSearch.value.toLowerCase().trim());
+  });
+  document.getElementById('clearFilterBtn').addEventListener('click', clearSpeciesFilter);
+
+  // -----------------------------------------------------------------------
+  // Init
+  // -----------------------------------------------------------------------
+  populateSpeciesSelect();
+  renderSpeciesList('');
+  createChart();
+  updateDashboardForSelection(null);
+</script>
+</body>
+</html>
