@@ -845,6 +845,8 @@
   renderSpeciesList('');
   createChart();
   updateDashboardForSelection(null);
+  // Force Leaflet to recalculate map container size after full page render
+  setTimeout(() => map.invalidateSize(), 300);
 </script>
 </body>
 </html>
