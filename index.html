@@ -256,6 +256,9 @@
   <header class="panel header">
     <div class="brand">
       <h1>Frog Records Dashboard</h1>
+      <p style="margin:3px 0 0;font-size:12px;color:#ffd166;">
+        Demo version — live map dots require local GeoServer &amp; PostgreSQL
+      </p>
     </div>
     <div class="header-actions">
       <div class="search-box">
@@ -440,10 +443,44 @@
   const osm = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
     { maxZoom:19, attribution:'&copy; OpenStreetMap contributors' });
 
+  // DEMO_MODE: when true, uses sample GeoJSON dots instead of local GeoServer WMS.
+  // Set to false when running with local GeoServer on localhost:8080.
+  const DEMO_MODE = true;
+
   const WMS_URL  = 'http://localhost:8080/geoserver/frogs/wms';
   const WMS_BASE = { layers:'frogs:frog_raw', format:'image/png', transparent:true, attribution:'GeoServer frogs:frog_raw' };
 
-  const allSpeciesWMS = L.tileLayer.wms(WMS_URL, { ...WMS_BASE }).addTo(map);
+  // Sample observation points (spread across Australia) for demo mode
+  const DEMO_POINTS = [
+    [-33.8,151.2],[-27.5,153.0],[-37.8,144.9],[-31.9,115.8],[-34.9,138.6],
+    [-42.8,147.3],[-12.5,130.8],[-35.3,149.1],[-32.0,152.5],[-28.0,153.4],
+    [-36.4,145.3],[-33.4,149.6],[-29.7,152.9],[-25.3,152.5],[-23.4,150.5],
+    [-19.3,146.8],[-16.9,145.8],[-34.2,142.2],[-36.7,142.5],[-38.4,146.4],
+    [-37.5,143.9],[-30.7,121.5],[-17.9,122.2],[-22.2,114.2],[-31.6,117.0],
+    [-26.6,118.5],[-29.0,114.6],[-24.9,113.7],[-20.7,116.8],[-33.0,118.0],
+    [-30.0,136.0],[-32.5,133.7],[-34.7,135.9],[-27.0,133.4],[-23.7,133.9],
+    [-21.0,128.0],[-17.0,136.2],[-14.5,132.3],[-13.1,130.2],[-15.5,128.8],
+    [-29.5,148.0],[-31.0,146.5],[-33.5,147.3],[-26.0,148.8],[-24.0,151.0],
+    [-30.5,151.6],[-32.7,150.3],[-35.1,147.4],[-36.1,146.9],[-37.2,148.5],
+  ];
+
+  // Demo layer: red circle markers matching GeoServer's default style
+  let demoLayer = null;
+  let demoFilteredLayer = null;
+
+  function buildDemoLayer(points, color){
+    return L.layerGroup(points.map(([lat, lng]) =>
+      L.circleMarker([lat, lng], {
+        radius: 5, fillColor: color, color: color,
+        weight: 0.5, opacity: 1, fillOpacity: 0.85
+      })
+    ));
+  }
+
+  const allSpeciesWMS = DEMO_MODE ? null : L.tileLayer.wms(WMS_URL, { ...WMS_BASE });
+  if (!DEMO_MODE && allSpeciesWMS) allSpeciesWMS.addTo(map);
+  if (DEMO_MODE){ demoLayer = buildDemoLayer(DEMO_POINTS, '#ff3333'); demoLayer.addTo(map); }
+
   let filteredWMS     = null;
   let activeScientific = null;
   let timelineChart   = null;
@@ -510,20 +547,29 @@
   function escapeCql(v){ return String(v).replace(/'/g,"''"); }
 
   function applySpeciesFilter(scientific, commonName){
-    if (filteredWMS) map.removeLayer(filteredWMS);
-    allSpeciesWMS.setOpacity(0);
-
     const pal = speciesData.find(d => d.scientific === scientific)?.pal || PALETTE[0];
-    map.getPane('filteredPane').style.filter = pal.filter;
 
-    filteredWMS = L.tileLayer.wms(WMS_URL, {
-      ...WMS_BASE,
-      CQL_FILTER: `scientificname='${escapeCql(scientific)}'`,
-      pane: 'filteredPane'
-    }).addTo(map);
+    if (DEMO_MODE){
+      // Demo: hide all dots, show species subset in its unique color
+      if (demoFilteredLayer){ map.removeLayer(demoFilteredLayer); demoFilteredLayer = null; }
+      if (demoLayer) demoLayer.remove();
+      // Use a deterministic subset of DEMO_POINTS based on species index
+      const idx = speciesData.findIndex(d => d.scientific === scientific);
+      const subset = DEMO_POINTS.filter((_, i) => i % 10 <= (idx % 5 + 2));
+      demoFilteredLayer = buildDemoLayer(subset, pal.color);
+      demoFilteredLayer.addTo(map);
+    } else {
+      if (filteredWMS) map.removeLayer(filteredWMS);
+      if (allSpeciesWMS) allSpeciesWMS.setOpacity(0);
+      map.getPane('filteredPane').style.filter = pal.filter;
+      filteredWMS = L.tileLayer.wms(WMS_URL, {
+        ...WMS_BASE,
+        CQL_FILTER: `scientificname='${escapeCql(scientific)}'`,
+        pane: 'filteredPane'
+      }).addTo(map);
+    }
 
     activeScientific = scientific;
-
     const dot = document.getElementById('mapFilterDot');
     dot.style.background  = pal.color;
     dot.style.boxShadow   = `0 0 7px ${pal.color}`;
@@ -534,8 +580,13 @@
   }
 
   function clearSpeciesFilter(){
-    if (filteredWMS){ map.removeLayer(filteredWMS); filteredWMS = null; }
-    allSpeciesWMS.setOpacity(1);
+    if (DEMO_MODE){
+      if (demoFilteredLayer){ map.removeLayer(demoFilteredLayer); demoFilteredLayer = null; }
+      if (demoLayer && !map.hasLayer(demoLayer)) demoLayer.addTo(map);
+    } else {
+      if (filteredWMS){ map.removeLayer(filteredWMS); filteredWMS = null; }
+      if (allSpeciesWMS) allSpeciesWMS.setOpacity(1);
+    }
     activeScientific = null;
     document.getElementById('mapFilterBadge').classList.remove('visible');
     document.getElementById('mapFilterBadge').style.borderColor = '';
