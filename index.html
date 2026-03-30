@@ -6,7 +6,10 @@
   <title>Frog Records Dashboard | Portfolio</title>
 
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css"/>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css"/>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
   <style>
@@ -459,12 +462,25 @@
   let demoFilteredLayer = null;
 
   function buildDemoLayer(points, color){
-    return L.layerGroup(points.map(([lat, lng]) =>
-      L.circleMarker([lat, lng], {
+    const cluster = L.markerClusterGroup({
+      maxClusterRadius: 50,
+      disableClusteringAtZoom: 9,
+      iconCreateFunction: function(c){
+        const n = c.getChildCount();
+        const size = n > 500 ? 44 : n > 100 ? 36 : 28;
+        return L.divIcon({
+          html: `<div style="background:${color};opacity:.82;width:${size}px;height:${size}px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#fff;border:2px solid rgba(255,255,255,.4);">${n > 999 ? Math.round(n/1000)+'k' : n}</div>`,
+          className: '', iconSize: [size, size]
+        });
+      }
+    });
+    points.forEach(([lat, lng]) => {
+      cluster.addLayer(L.circleMarker([lat, lng], {
         radius: 5, fillColor: color, color: color,
         weight: 0.5, opacity: 1, fillOpacity: 0.85
-      })
-    ));
+      }));
+    });
+    return cluster;
   }
 
   const allSpeciesWMS = DEMO_MODE ? null : L.tileLayer.wms(WMS_URL, { ...WMS_BASE });
